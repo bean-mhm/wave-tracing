@@ -10,9 +10,9 @@
 int main()
 {
     WaveParams params;
-    params.resX = 201;
-    params.resY = 201;
-    params.resZ = 201;
+    params.resX = 601;
+    params.resY = 601;
+    params.resZ = 601;
     params.step = 0.0025f;
     params.speed = 30.0f;
     params.damp = 1.0f;
@@ -46,7 +46,7 @@ int main()
 
     Wave3D wave(params, initial);
     float timestep = params.getMaxTimestep();
-    uint32_t runs = 500;
+    uint32_t runs = 100;
 
     auto start = std::chrono::high_resolution_clock::now();
     for (uint32_t i = 0; i < runs; i++)
@@ -57,7 +57,7 @@ int main()
     float ms = std::chrono::duration_cast<std::chrono::microseconds>(duration).count() / 1000.0f;
 
     std::cout << strFormat(
-        "%u steps done in %.1f ms (%.1f steps/sec)\n",
+        "%u steps done in %.1f ms (%.3f steps/sec)\n",
         runs,
         ms,
         (float)runs / (ms / 1000.0f));

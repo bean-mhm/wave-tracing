@@ -1,7 +1,26 @@
 #include "Wave3D.h"
 
 #include <omp.h>
-#include <nmmintrin.h>
+#include <xmmintrin.h>
+
+/*
+
+https://stackoverflow.com/a/11228864/18049911
+
+<mmintrin.h>  MMX
+<xmmintrin.h> SSE
+<emmintrin.h> SSE2
+<pmmintrin.h> SSE3
+<tmmintrin.h> SSSE3
+<smmintrin.h> SSE4.1
+<nmmintrin.h> SSE4.2
+<ammintrin.h> SSE4A
+<wmmintrin.h> AES
+<immintrin.h> AVX, AVX2, FMA
+
+*/
+
+#define WAVE3D_VEC
 
 float WaveParams::getMaxTimestep()
 {
@@ -110,6 +129,50 @@ void Wave3D::increment(float timestep)
         {
             for (int x = 0; x < m_params.resX; x++)
             {
+#ifdef WAVE3D_VEC
+                // uint32_t currIndex = index3D(x, y, z, m_params.resX, m_params.resY);
+                uint32_t currIndex = (z * strideZ) + (y * m_params.resX) + x;
+
+                // Skip this point if the speed factor is 0
+                if (m_speedFactors[currIndex] == 0.0f)
+                    continue;
+
+                // Calculate speed^2
+                float c2 = m_params.speed * m_speedFactors[currIndex];
+                c2 *= c2;
+
+                // Get the current value of this point
+                float curr = currValues[currIndex];
+
+                // Calculate the gradients
+
+                __m128 op1_A = _mm_set_ps(
+                    (x + 1 >= m_params.resX) ? 0.0f : currValues[currIndex + 1],
+                    (y + 1 >= m_params.resY) ? 0.0f : currValues[currIndex + m_params.resX],
+                    (z + 1 >= m_params.resZ) ? 0.0f : currValues[currIndex + strideZ],
+                    0.0f);
+                __m128 op1_B = _mm_set_ps(curr, curr, curr, 0.0f);
+                __m128 op1_Out = _mm_sub_ps(op1_A, op1_B);
+
+                __m128 op2_A = _mm_set_ps(curr, curr, curr, 0.0f);
+                __m128 op2_B = _mm_set_ps(
+                    (x == 0) ? 0.0f : currValues[currIndex - 1],
+                    (y == 0) ? 0.0f : currValues[currIndex - m_params.resX],
+                    (z == 0) ? 0.0f : currValues[currIndex - strideZ],
+                    0.0f);
+                __m128 op2_Out = _mm_sub_ps(op1_A, op1_B);
+
+                __m128 op3_Out = _mm_sub_ps(op1_Out, op2_Out);
+
+                float grads[4];
+                _mm_store_ps(grads, op3_Out);
+
+                // Calculate the velocity
+                float vel = ((curr - lastValues[currIndex]) / m_lastTimestep) + (accMul * c2 * (grads[0] + grads[1] + grads[2]));
+
+                // Store the new value in the other buffer
+                lastValues[currIndex] = curr + (vel * velMul);
+#else
                 // uint32_t currIndex = index3D(x, y, z, m_params.resX, m_params.resY);
                 uint32_t currIndex = (z * strideZ) + (y * m_params.resX) + x;
 
@@ -146,6 +209,7 @@ void Wave3D::increment(float timestep)
 
                 // Store the new value in the other buffer
                 lastValues[currIndex] = curr + (currVel * velMul);
+#endif
             }
         }
     }
