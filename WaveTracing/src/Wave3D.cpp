@@ -1,6 +1,11 @@
 #include "Wave3D.h"
 
 #include <omp.h>
+
+#define WAVE3D_VEC
+
+#ifdef WAVE3D_VEC
+
 #include <xmmintrin.h>
 
 /*
@@ -20,7 +25,7 @@ https://stackoverflow.com/a/11228864/18049911
 
 */
 
-#define WAVE3D_VEC
+#endif
 
 float WaveParams::getMaxTimestep()
 {
@@ -40,9 +45,9 @@ float WaveParams::getMaxFrequency()
 
 std::array<float, 3> WaveParams::getDimensions()
 {
-    float dimX = (float)(resX - 1) * step;
-    float dimY = (float)(resY - 1) * step;
-    float dimZ = (float)(resZ - 1) * step;
+    float dimX = (float)(res.x - 1) * step;
+    float dimY = (float)(res.y - 1) * step;
+    float dimZ = (float)(res.z - 1) * step;
     return { dimX, dimY, dimZ };
 }
 
@@ -57,7 +62,7 @@ Wave3D::Wave3D(const WaveParams& params, const std::vector<float>& initialValues
 {
     // Verify the parameters
 
-    if (m_params.resX < 1 || m_params.resY < 1 || m_params.resZ < 1)
+    if (m_params.res.x < 1 || m_params.res.y < 1 || m_params.res.z < 1)
         throw std::exception("A resolution of at least 1x1x1 is required.");
 
     if (m_params.step <= 0.0f)
@@ -66,8 +71,24 @@ Wave3D::Wave3D(const WaveParams& params, const std::vector<float>& initialValues
     if (m_params.damp < 1.0f)
         throw std::exception("Damp must be a real number larger than or equal to 1.");
 
+    if (m_params.useSubGrid)
+    {
+        bool validSubRes =
+            (m_params.subGridRes.x < m_params.res.x)
+            && (m_params.subGridRes.y < m_params.res.y)
+            && (m_params.subGridRes.z < m_params.res.z);
+
+        validSubRes &=
+            (m_params.subGridRes.x > 1)
+            && (m_params.subGridRes.y > 1)
+            && (m_params.subGridRes.z > 1);
+
+        if (!validSubRes)
+            m_params.useSubGrid = false;
+    }
+
     // Total number of points to simulate
-    m_numPoints = m_params.resX * m_params.resY * m_params.resZ;
+    m_numPoints = m_params.res.x * m_params.res.y * m_params.res.z;
 
     // Initial values
     if (initialValues.size() < 1)
@@ -120,61 +141,18 @@ void Wave3D::increment(float timestep)
     float dampMul = powf(m_params.damp, -timestep);
     float accMul = timestep / powf(m_params.step, 2.0f);
     float velMul = dampMul * timestep;
-    uint32_t strideZ = m_params.resX * m_params.resY;
+
+    uint32_t strideZ = m_params.res.x * m_params.res.y;
 
 #pragma omp parallel for
-    for (int z = 0; z < m_params.resZ; z++)
+    for (int z = 0; z < m_params.res.z; z++)
     {
-        for (int y = 0; y < m_params.resY; y++)
+        for (int y = 0; y < m_params.res.y; y++)
         {
-            for (int x = 0; x < m_params.resX; x++)
+            for (int x = 0; x < m_params.res.x; x++)
             {
-#ifdef WAVE3D_VEC
-                // uint32_t currIndex = index3D(x, y, z, m_params.resX, m_params.resY);
-                uint32_t currIndex = (z * strideZ) + (y * m_params.resX) + x;
-
-                // Skip this point if the speed factor is 0
-                if (m_speedFactors[currIndex] == 0.0f)
-                    continue;
-
-                // Calculate speed^2
-                float c2 = m_params.speed * m_speedFactors[currIndex];
-                c2 *= c2;
-
-                // Get the current value of this point
-                float curr = currValues[currIndex];
-
-                // Calculate the gradients
-
-                __m128 op1_A = _mm_set_ps(
-                    (x + 1 >= m_params.resX) ? 0.0f : currValues[currIndex + 1],
-                    (y + 1 >= m_params.resY) ? 0.0f : currValues[currIndex + m_params.resX],
-                    (z + 1 >= m_params.resZ) ? 0.0f : currValues[currIndex + strideZ],
-                    0.0f);
-                __m128 op1_B = _mm_set_ps(curr, curr, curr, 0.0f);
-                __m128 op1_Out = _mm_sub_ps(op1_A, op1_B);
-
-                __m128 op2_A = _mm_set_ps(curr, curr, curr, 0.0f);
-                __m128 op2_B = _mm_set_ps(
-                    (x == 0) ? 0.0f : currValues[currIndex - 1],
-                    (y == 0) ? 0.0f : currValues[currIndex - m_params.resX],
-                    (z == 0) ? 0.0f : currValues[currIndex - strideZ],
-                    0.0f);
-                __m128 op2_Out = _mm_sub_ps(op1_A, op1_B);
-
-                __m128 op3_Out = _mm_sub_ps(op1_Out, op2_Out);
-
-                float grads[4];
-                _mm_store_ps(grads, op3_Out);
-
-                // Calculate the velocity
-                float vel = ((curr - lastValues[currIndex]) / m_lastTimestep) + (accMul * c2 * (grads[0] + grads[1] + grads[2]));
-
-                // Store the new value in the other buffer
-                lastValues[currIndex] = curr + (vel * velMul);
-#else
-                // uint32_t currIndex = index3D(x, y, z, m_params.resX, m_params.resY);
-                uint32_t currIndex = (z * strideZ) + (y * m_params.resX) + x;
+                // uint32_t currIndex = index3D(x, y, z, m_params.res.x, m_params.res.Y);
+                uint32_t currIndex = (z * strideZ) + (y * m_params.res.x) + x;
 
                 // Skip this point if the speed factor is 0
                 if (m_speedFactors[currIndex] == 0.0f)
@@ -190,15 +168,15 @@ void Wave3D::increment(float timestep)
                 // Calculate the gradients
 
                 float gradX =
-                    (((x + 1 >= m_params.resX) ? 0.0f : currValues[currIndex + 1]) - curr)
+                    (((x + 1 >= m_params.res.x) ? 0.0f : currValues[currIndex + 1]) - curr)
                     - (curr - ((x == 0) ? 0.0f : currValues[currIndex - 1]));
 
                 float gradY =
-                    (((y + 1 >= m_params.resY) ? 0.0f : currValues[currIndex + m_params.resX]) - curr)
-                    - (curr - ((y == 0) ? 0.0f : currValues[currIndex - m_params.resX]));
+                    (((y + 1 >= m_params.res.y) ? 0.0f : currValues[currIndex + m_params.res.x]) - curr)
+                    - (curr - ((y == 0) ? 0.0f : currValues[currIndex - m_params.res.x]));
 
                 float gradZ =
-                    (((z + 1 >= m_params.resZ) ? 0.0f : currValues[currIndex + strideZ]) - curr)
+                    (((z + 1 >= m_params.res.z) ? 0.0f : currValues[currIndex + strideZ]) - curr)
                     - (curr - ((z == 0) ? 0.0f : currValues[currIndex - strideZ]));
 
                 // Calculate the current velocity
@@ -209,7 +187,6 @@ void Wave3D::increment(float timestep)
 
                 // Store the new value in the other buffer
                 lastValues[currIndex] = curr + (currVel * velMul);
-#endif
             }
         }
     }

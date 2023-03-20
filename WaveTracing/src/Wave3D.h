@@ -5,11 +5,19 @@
 #include <vector>
 #include <cstdint>
 
+struct iVec3
+{
+    int x = 0;
+    int y = 0;
+    int z = 0;
+};
+
 struct WaveParams
 {
-    uint32_t resX = 1;
-    uint32_t resY = 1;
-    uint32_t resZ = 1;
+    iVec3 res{ 1, 1, 1 };
+
+    iVec3 subGridRes{ 1, 1, 1 };
+    bool useSubGrid = false;
 
     float step = 1.0f;
     float speed = 1.0f;
