@@ -45,9 +45,9 @@ float WaveParams::getMaxFrequency()
 
 std::array<float, 3> WaveParams::getDimensions()
 {
-    float dimX = (float)(res.x - 1) * step;
-    float dimY = (float)(res.y - 1) * step;
-    float dimZ = (float)(res.z - 1) * step;
+    float dimX = (float)(resX - 1) * step;
+    float dimY = (float)(resY - 1) * step;
+    float dimZ = (float)(resZ - 1) * step;
     return { dimX, dimY, dimZ };
 }
 
@@ -62,7 +62,7 @@ Wave3D::Wave3D(const WaveParams& params, const std::vector<float>& initialValues
 {
     // Verify the parameters
 
-    if (m_params.res.x < 1 || m_params.res.y < 1 || m_params.res.z < 1)
+    if (m_params.resX < 1 || m_params.resY < 1 || m_params.resZ < 1)
         throw std::exception("A resolution of at least 1x1x1 is required.");
 
     if (m_params.step <= 0.0f)
@@ -71,24 +71,8 @@ Wave3D::Wave3D(const WaveParams& params, const std::vector<float>& initialValues
     if (m_params.damp < 1.0f)
         throw std::exception("Damp must be a real number larger than or equal to 1.");
 
-    if (m_params.useSubGrid)
-    {
-        bool validSubRes =
-            (m_params.subGridRes.x < m_params.res.x)
-            && (m_params.subGridRes.y < m_params.res.y)
-            && (m_params.subGridRes.z < m_params.res.z);
-
-        validSubRes &=
-            (m_params.subGridRes.x > 1)
-            && (m_params.subGridRes.y > 1)
-            && (m_params.subGridRes.z > 1);
-
-        if (!validSubRes)
-            m_params.useSubGrid = false;
-    }
-
     // Total number of points to simulate
-    m_numPoints = m_params.res.x * m_params.res.y * m_params.res.z;
+    m_numPoints = m_params.resX * m_params.resY * m_params.resZ;
 
     // Initial values
     if (initialValues.size() < 1)
@@ -138,55 +122,55 @@ void Wave3D::increment(float timestep)
     m_alternate = !m_alternate;
 
     // Eliminate repeated calculations in for loops
-    float dampMul = powf(m_params.damp, -timestep);
-    float accMul = timestep / powf(m_params.step, 2.0f);
-    float velMul = dampMul * timestep;
+    const float dampMul = powf(m_params.damp, -timestep);
+    const float accMul = timestep / powf(m_params.step, 2.0f);
+    const float velMul = dampMul * timestep;
 
-    uint32_t strideZ = m_params.res.x * m_params.res.y;
+    const int strideY = m_params.resX;
+    const int strideZ = m_params.resX * m_params.resY;
 
 #pragma omp parallel for
-    for (int z = 0; z < m_params.res.z; z++)
+    for (int z = 0; z < m_params.resZ; z++)
     {
-        for (int y = 0; y < m_params.res.y; y++)
+        for (int y = 0; y < m_params.resY; y++)
         {
-            for (int x = 0; x < m_params.res.x; x++)
+            for (int x = 0; x < m_params.resX; x++)
             {
-                // uint32_t currIndex = index3D(x, y, z, m_params.res.x, m_params.res.Y);
-                uint32_t currIndex = (z * strideZ) + (y * m_params.res.x) + x;
+                uint32_t index = (z * strideZ) + (y * strideY) + x;
 
                 // Skip this point if the speed factor is 0
-                if (m_speedFactors[currIndex] == 0.0f)
+                if (m_speedFactors[index] == 0.0f)
                     continue;
 
                 // Calculate speed^2
-                float c2 = m_params.speed * m_speedFactors[currIndex];
+                float c2 = m_params.speed * m_speedFactors[index];
                 c2 *= c2;
 
                 // Get the current value of this point
-                float curr = currValues[currIndex];
+                float curr = currValues[index];
 
                 // Calculate the gradients
 
-                float gradX =
-                    (((x + 1 >= m_params.res.x) ? 0.0f : currValues[currIndex + 1]) - curr)
-                    - (curr - ((x == 0) ? 0.0f : currValues[currIndex - 1]));
+                float gradZ =
+                    (((z + 1 >= m_params.resZ) ? 0.0f : currValues[index + strideZ]) - curr)
+                    - (curr - ((z == 0) ? 0.0f : currValues[index - strideZ]));
 
                 float gradY =
-                    (((y + 1 >= m_params.res.y) ? 0.0f : currValues[currIndex + m_params.res.x]) - curr)
-                    - (curr - ((y == 0) ? 0.0f : currValues[currIndex - m_params.res.x]));
+                    (((y + 1 >= m_params.resY) ? 0.0f : currValues[index + strideY]) - curr)
+                    - (curr - ((y == 0) ? 0.0f : currValues[index - strideY]));
 
-                float gradZ =
-                    (((z + 1 >= m_params.res.z) ? 0.0f : currValues[currIndex + strideZ]) - curr)
-                    - (curr - ((z == 0) ? 0.0f : currValues[currIndex - strideZ]));
+                float gradX =
+                    (((x + 1 >= m_params.resX) ? 0.0f : currValues[index + 1]) - curr)
+                    - (curr - ((x == 0) ? 0.0f : currValues[index - 1]));
 
                 // Calculate the current velocity
-                float currVel = (curr - lastValues[currIndex]) / m_lastTimestep;
+                float currVel = (curr - lastValues[index]) / m_lastTimestep;
 
                 // Adjust the velocity
                 currVel += accMul * c2 * (gradX + gradY + gradZ);
 
                 // Store the new value in the other buffer
-                lastValues[currIndex] = curr + (currVel * velMul);
+                lastValues[index] = curr + (currVel * velMul);
             }
         }
     }

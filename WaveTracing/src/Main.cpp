@@ -1,6 +1,9 @@
 #include <iostream>
+#include <string>
 #include <vector>
+#include <array>
 #include <chrono>
+#include <thread>
 
 #include "Wave3D.h"
 
@@ -10,11 +13,9 @@
 int main()
 {
     WaveParams params;
-    params.res = {
-        601,
-        601,
-        601
-    };
+    params.resX = 601;
+    params.resY = 601;
+    params.resZ = 601;
     params.step = 0.0025f;
     params.speed = 30.0f;
     params.damp = 1.0f;
@@ -23,8 +24,6 @@ int main()
 
     std::cout << strFormat(
         "resolution:      %u x %u x %u\n"
-        "sub resolution:  %u x %u x %u\n"
-        "use sub-grid:    %s\n"
         "step size:       %.7f m\n"
         "dimensions:      %.7f m x %.7f m x %.7f m\n"
         "volume:          %.7f m^3\n"
@@ -33,9 +32,7 @@ int main()
         "min wavelength:  %.7f m\n"
         "max frequency:   %.2f hz\n"
         "damp:            %.2f\n\n",
-        params.res.x, params.res.y, params.res.z,
-        params.subGridRes.x, params.subGridRes.y, params.subGridRes.z,
-        params.useSubGrid ? "True" : "False",
+        params.resX, params.resY, params.resZ,
         params.step,
         dims[0], dims[1], dims[2],
         params.getVolume(),
@@ -46,7 +43,7 @@ int main()
         params.damp);
 
     std::vector<float> initial;
-    initial.resize(params.res.x * params.res.y * params.res.z);
+    initial.resize(params.resX * params.resY * params.resZ);
     for (auto& v : initial)
         v = Random::nextFloat(-0.1f, 0.1f);
 
@@ -59,17 +56,17 @@ int main()
     {
         wave.increment(timestep);
     }
-    auto duration = std::chrono::high_resolution_clock::now() - start;
-    float ms = std::chrono::duration_cast<std::chrono::microseconds>(duration).count() / 1000.0f;
+    auto end = std::chrono::high_resolution_clock::now();
 
-    uint64_t numPoints = params.res.x * params.res.y * params.res.z;
+    double duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000000.0;
 
-    float pointsPerSec = ((float)runs * (float)numPoints) / (ms / 1000.0f);
+    uint64_t numPoints = params.resX * params.resY * params.resZ;
+    float pointsPerSec = (float)runs * (float)numPoints / duration;
 
     std::cout << strFormat(
         "%u steps done in %.1f ms  -  %.1f million points / sec\n",
         runs,
-        ms,
+        duration * 1000.0,
         pointsPerSec / 1000000.0f);
 
     std::cout << strFormat("sim time: %f s\n", wave.getTotalTime());

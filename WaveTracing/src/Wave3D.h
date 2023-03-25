@@ -5,19 +5,11 @@
 #include <vector>
 #include <cstdint>
 
-struct iVec3
-{
-    int x = 0;
-    int y = 0;
-    int z = 0;
-};
-
 struct WaveParams
 {
-    iVec3 res{ 1, 1, 1 };
-
-    iVec3 subGridRes{ 1, 1, 1 };
-    bool useSubGrid = false;
+    uint32_t resX = 1;
+    uint32_t resY = 1;
+    uint32_t resZ = 1;
 
     float step = 1.0f;
     float speed = 1.0f;
@@ -58,7 +50,18 @@ public:
 
 };
 
-inline uint32_t index3D(uint32_t x, uint32_t y, uint32_t z, uint32_t resX, uint32_t resY)
+inline int index3D(int x, int y, int z, int strideY, int strideZ)
 {
-    return (z * resX * resY) + (y * resX) + x;
+    return (z * strideZ) + (y * strideY) + x;
+}
+
+inline bool inBounds3D(int x, int y, int z, int resX, int resY, int resZ)
+{
+    return
+        (x < resX)
+        && (y < resY)
+        && (z < resZ)
+        && (x >= 0)
+        && (y >= 0)
+        && (z >= 0);
 }
