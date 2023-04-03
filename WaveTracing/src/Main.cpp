@@ -13,14 +13,18 @@
 int main()
 {
     WaveParams params;
-    params.resX = 501;
-    params.resY = 501;
-    params.resZ = 501;
+    params.resX = 701;
+    params.resY = 701;
+    params.resZ = 701;
     params.step = 0.0025f;
     params.speed = 30.0f;
     params.damp = 1.0f;
 
+    uint64_t numPoints = params.resX * params.resY * params.resZ;
     auto dims = params.getDimensions();
+
+    float timestep = params.getMaxTimestep();
+    uint32_t runs = 20;
 
     std::cout << strFormat(
         "resolution:      %u x %u x %u\n"
@@ -45,26 +49,26 @@ int main()
     std::cout << "Making randomized buffer...\n";
 
     std::vector<float> initial;
-    initial.resize(params.resX * params.resY * params.resZ);
-    for (auto& v : initial)
-        v = Random::nextFloat(-0.5f, 0.5f);
+    initial.resize(numPoints);
+
+#pragma omp parallel for
+    for (int i = 0; i < numPoints; i++)
+    {
+        initial[i] = Random::nextFloat(-0.5f, 0.5f);
+    }
 
     Wave3D wave(params, initial);
 
-    float timestep = params.getMaxTimestep();
-    uint32_t runs = 10;
-
     std::cout << "Starting the simulation...\n";
-
     auto start = std::chrono::high_resolution_clock::now();
+
     for (uint32_t i = 0; i < runs; i++)
     {
         wave.increment(timestep);
     }
+
     auto end = std::chrono::high_resolution_clock::now();
     double duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000000.0;
-
-    uint64_t numPoints = params.resX * params.resY * params.resZ;
     float pointsPerSec = (float)runs * (float)numPoints / duration;
 
     std::cout << strFormat(
