@@ -13,9 +13,9 @@
 int main()
 {
     WaveParams params;
-    params.resX = 601;
-    params.resY = 601;
-    params.resZ = 601;
+    params.resX = 501;
+    params.resY = 501;
+    params.resZ = 501;
     params.step = 0.0025f;
     params.speed = 30.0f;
     params.damp = 1.0f;
@@ -42,14 +42,19 @@ int main()
         params.getMaxFrequency(),
         params.damp);
 
+    std::cout << "Making randomized buffer...\n";
+
     std::vector<float> initial;
     initial.resize(params.resX * params.resY * params.resZ);
     for (auto& v : initial)
-        v = Random::nextFloat(-0.1f, 0.1f);
+        v = Random::nextFloat(-0.5f, 0.5f);
 
     Wave3D wave(params, initial);
+
     float timestep = params.getMaxTimestep();
     uint32_t runs = 10;
+
+    std::cout << "Starting the simulation...\n";
 
     auto start = std::chrono::high_resolution_clock::now();
     for (uint32_t i = 0; i < runs; i++)
@@ -57,7 +62,6 @@ int main()
         wave.increment(timestep);
     }
     auto end = std::chrono::high_resolution_clock::now();
-
     double duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() / 1000000.0;
 
     uint64_t numPoints = params.resX * params.resY * params.resZ;

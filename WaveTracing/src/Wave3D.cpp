@@ -81,14 +81,16 @@ Wave3D::Wave3D(const WaveParams& params, const std::vector<float>& initialValues
         for (auto& v : m_valuesA)
             v = 0.0f;
     }
-    else if (initialValues.size() != m_numPoints)
-    {
-        throw std::exception("Invalid size of initial values.");
-    }
-    else
+    else if (initialValues.size() == m_numPoints)
     {
         m_valuesA = initialValues;
     }
+    else
+    {
+        throw std::exception("Invalid size of initial values.");
+    }
+
+    // Alternate buffer
     m_valuesB = m_valuesA;
 
     // Initial speed factors
@@ -98,13 +100,13 @@ Wave3D::Wave3D(const WaveParams& params, const std::vector<float>& initialValues
         for (auto& v : m_speedFactors)
             v = 1.0f;
     }
-    else if (speedFactors.size() != m_numPoints)
+    else if (speedFactors.size() == m_numPoints)
     {
-        throw std::exception("Invalid size of initial speed factors.");
+        m_speedFactors = speedFactors;
     }
     else
     {
-        m_speedFactors = speedFactors;
+        throw std::exception("Invalid size of initial speed factors.");
     }
 }
 
@@ -117,7 +119,7 @@ void Wave3D::increment(float timestep)
         m_lastTimestep = timestep;
 
     // Alternate between m_valuesA and m_valuesB
-    std::vector<float>& currValues = m_alternate ? m_valuesB : m_valuesA;
+    const std::vector<float>& currValues = m_alternate ? m_valuesB : m_valuesA;
     std::vector<float>& lastValues = m_alternate ? m_valuesA : m_valuesB;
     m_alternate = !m_alternate;
 
@@ -137,10 +139,6 @@ void Wave3D::increment(float timestep)
             for (int x = 0; x < m_params.resX; x++)
             {
                 uint32_t index = (z * strideZ) + (y * strideY) + x;
-
-                // Skip this point if the speed factor is 0
-                if (m_speedFactors[index] == 0.0f)
-                    continue;
 
                 // Calculate speed^2
                 float c2 = m_params.speed * m_speedFactors[index];
