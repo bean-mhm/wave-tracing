@@ -15,6 +15,8 @@ struct WaveParams
     float speed = 1.0f;
     float damp = 1.0f;
 
+    bool planarOrdering = false;
+
     float getMaxTimestep();
     float getMinWavelength();
     float getMaxFrequency();
@@ -34,7 +36,8 @@ private:
     std::vector<float> m_speedFactors;
 
     uint32_t m_numPoints = 0;
-    float m_lastTimestep = 0.0f;
+    uint32_t m_numValues = 0;
+    float m_prevTimestep = 0.0f;
     float m_totalTime = 0.0f;
 
 public:

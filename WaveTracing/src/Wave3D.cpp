@@ -2,8 +2,6 @@
 
 #include <omp.h>
 
-#define WAVE3D_VEC
-
 #ifdef WAVE3D_VEC
 
 #include <xmmintrin.h>
@@ -73,17 +71,30 @@ Wave3D::Wave3D(const WaveParams& params, const std::vector<float>& initialValues
 
     // Total number of points to simulate
     m_numPoints = m_params.resX * m_params.resY * m_params.resZ;
+    m_numValues = m_params.planarOrdering ? m_numPoints : (m_numPoints * 2);
 
     // Initial values
     if (initialValues.size() < 1)
     {
-        m_valuesA.resize(m_numPoints);
+        m_valuesA.resize(m_numValues);
         for (auto& v : m_valuesA)
             v = 0.0f;
     }
     else if (initialValues.size() == m_numPoints)
     {
-        m_valuesA = initialValues;
+        if (m_params.planarOrdering)
+        {
+            m_valuesA = initialValues;
+        }
+        else
+        {
+            m_valuesA.resize(m_numValues);
+            for (int i = 0; i < initialValues.size(); i++)
+            {
+                m_valuesA[i * 2] = initialValues[i];
+                m_valuesA[i * 2 + 1] = initialValues[i];
+            }
+        }
     }
     else
     {
@@ -91,7 +102,10 @@ Wave3D::Wave3D(const WaveParams& params, const std::vector<float>& initialValues
     }
 
     // Alternate buffer
-    m_valuesB = m_valuesA;
+    if (m_params.planarOrdering)
+    {
+        m_valuesB = m_valuesA;
+    }
 
     // Initial speed factors
     if (speedFactors.size() < 1)
@@ -115,19 +129,27 @@ void Wave3D::increment(float timestep)
     if (timestep == 0.0f)
         return;
 
-    if (m_lastTimestep == 0.0f)
-        m_lastTimestep = timestep;
+    if (m_prevTimestep == 0.0f)
+        m_prevTimestep = timestep;
 
-    // Alternate between m_valuesA and m_valuesB
+    // Alternate between m_valuesA and m_valuesB (planar ordering)
     const std::vector<float>& currValues = m_alternate ? m_valuesB : m_valuesA;
-    std::vector<float>& lastValues = m_alternate ? m_valuesA : m_valuesB;
+    std::vector<float>& prevValues = m_alternate ? m_valuesA : m_valuesB;
+
+    // Alternate between the first and second compotents of each element (contagious ordering)
+    const int currIndexOffset = m_alternate ? 0 : 1;
+    const int prevIndexOffset = m_alternate ? 1 : 0;
+
+    // Alternation indicator
     m_alternate = !m_alternate;
 
     // Eliminate repeated calculations in for loops
+
     const float dampMul = powf(m_params.damp, -timestep);
     const float accMul = timestep / powf(m_params.step, 2.0f);
     const float velMul = dampMul * timestep;
 
+    const bool planar = m_params.planarOrdering;
     const int strideY = m_params.resX;
     const int strideZ = m_params.resX * m_params.resY;
 
@@ -144,42 +166,78 @@ void Wave3D::increment(float timestep)
                 float c2 = m_params.speed * m_speedFactors[index];
                 c2 *= c2;
 
-                // Get the current value of this point
-                float curr = currValues[index];
+                if (planar)
+                {
+                    // Get the current value of this point
+                    float curr = currValues[index];
 
-                // Calculate the gradients
+                    // Calculate the gradients
 
-                float gradZ =
-                    (((z + 1 >= m_params.resZ) ? 0.0f : currValues[index + strideZ]) - curr)
-                    - (curr - ((z == 0) ? 0.0f : currValues[index - strideZ]));
+                    float gradZ =
+                        (((z + 1 >= m_params.resZ) ? 0.0f : currValues[index + strideZ]) - curr)
+                        - (curr - ((z == 0) ? 0.0f : currValues[index - strideZ]));
 
-                float gradY =
-                    (((y + 1 >= m_params.resY) ? 0.0f : currValues[index + strideY]) - curr)
-                    - (curr - ((y == 0) ? 0.0f : currValues[index - strideY]));
+                    float gradY =
+                        (((y + 1 >= m_params.resY) ? 0.0f : currValues[index + strideY]) - curr)
+                        - (curr - ((y == 0) ? 0.0f : currValues[index - strideY]));
 
-                float gradX =
-                    (((x + 1 >= m_params.resX) ? 0.0f : currValues[index + 1]) - curr)
-                    - (curr - ((x == 0) ? 0.0f : currValues[index - 1]));
+                    float gradX =
+                        (((x + 1 >= m_params.resX) ? 0.0f : currValues[index + 1]) - curr)
+                        - (curr - ((x == 0) ? 0.0f : currValues[index - 1]));
 
-                // Calculate the current velocity
-                float currVel = (curr - lastValues[index]) / m_lastTimestep;
+                    // Calculate the current velocity
+                    float currVel = (curr - prevValues[index]) / m_prevTimestep;
 
-                // Adjust the velocity
-                currVel += accMul * c2 * (gradX + gradY + gradZ);
+                    // Adjust the velocity
+                    currVel += accMul * c2 * (gradX + gradY + gradZ);
 
-                // Store the new value in the other buffer
-                lastValues[index] = curr + (currVel * velMul);
+                    // Store the new value in the other buffer
+                    prevValues[index] = curr + (currVel * velMul);
+                }
+                else
+                {
+                    index *= 2;
+
+                    // Get the current value of this point
+                    float curr = m_valuesA[index + currIndexOffset];
+
+                    // Calculate the gradients
+
+                    float gradZ =
+                        (((z + 1 >= m_params.resZ) ? 0.0f : m_valuesA[index + strideZ + currIndexOffset]) - curr)
+                        - (curr - ((z == 0) ? 0.0f : m_valuesA[index - strideZ + currIndexOffset]));
+
+                    float gradY =
+                        (((y + 1 >= m_params.resY) ? 0.0f : m_valuesA[index + strideY + currIndexOffset]) - curr)
+                        - (curr - ((y == 0) ? 0.0f : m_valuesA[index - strideY + currIndexOffset]));
+
+                    float gradX =
+                        (((x + 1 >= m_params.resX) ? 0.0f : m_valuesA[index + 1 + currIndexOffset]) - curr)
+                        - (curr - ((x == 0) ? 0.0f : m_valuesA[index - 1 + currIndexOffset]));
+
+                    // Calculate the current velocity
+                    float currVel = (curr - m_valuesA[index + prevIndexOffset]) / m_prevTimestep;
+
+                    // Adjust the velocity
+                    currVel += accMul * c2 * (gradX + gradY + gradZ);
+
+                    // Store the new value in the other buffer
+                    m_valuesA[index + prevIndexOffset] = curr + (currVel * velMul);
+                }
             }
         }
     }
 
-    m_lastTimestep = timestep;
+    m_prevTimestep = timestep;
     m_totalTime += timestep;
 }
 
 std::vector<float>& Wave3D::getValues()
 {
-    return m_alternate ? m_valuesB : m_valuesA;
+    if (m_params.planarOrdering)
+        return m_alternate ? m_valuesB : m_valuesA;
+    else
+        return m_valuesA;
 }
 
 std::vector<float>& Wave3D::getSpeedFactors()

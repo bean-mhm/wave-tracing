@@ -13,12 +13,13 @@
 int main()
 {
     WaveParams params;
-    params.resX = 701;
-    params.resY = 701;
-    params.resZ = 701;
+    params.resX = 501;
+    params.resY = 501;
+    params.resZ = 501;
     params.step = 0.0025f;
     params.speed = 30.0f;
     params.damp = 1.0f;
+    params.planarOrdering = true;
 
     uint64_t numPoints = params.resX * params.resY * params.resZ;
     auto dims = params.getDimensions();
