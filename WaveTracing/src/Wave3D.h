@@ -15,8 +15,6 @@ struct WaveParams
     float speed = 1.0f;
     float damp = 1.0f;
 
-    bool planarOrdering = false;
-
     float getMaxTimestep();
     float getMinWavelength();
     float getMaxFrequency();
