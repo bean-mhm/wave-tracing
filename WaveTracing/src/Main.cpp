@@ -7,8 +7,78 @@
 
 #include "Wave3D.h"
 
+#include "Utils/NumberHelpers.h"
 #include "Utils/Random.h"
 #include "Utils/Misc.h"
+
+std::string strFromMeters(float meters, const std::string& format = "%.3f")
+{
+    int order = floorf(log10f(meters));
+
+    if (order < -6)
+    {
+        return strFormat(format + " nm", meters * powf(10.0f, 9.0f));
+    }
+    else if (0 && (order < -3))
+    {
+        return strFormat(format + " microns", meters * powf(10.0f, 6.0f));
+    }
+    else if (order < -2)
+    {
+        return strFormat(format + " mm", meters * powf(10.0f, 3.0f));
+    }
+    else if (order < 0)
+    {
+        return strFormat(format + " cm", meters * powf(10.0f, 2.0f));
+    }
+    else if (order < 3)
+    {
+        return strFormat(format + " m", meters);
+    }
+    else
+    {
+        return strFormat(format + " km", meters * powf(10.0f, -3.0f));
+    }
+}
+
+std::string strFromSeconds(float seconds, const std::string& format = "%.3f")
+{
+    int order = floorf(log10f(seconds));
+
+    if (order < -6)
+    {
+        return strFormat(format + " ns", seconds * powf(10.0f, 9.0f));
+    }
+    else if (0 && (order < -3))
+    {
+        return strFormat(format + " microsec", seconds * powf(10.0f, 6.0f));
+    }
+    else if (order < 0)
+    {
+        return strFormat(format + " ms", seconds * powf(10.0f, 3.0f));
+    }
+
+    if (seconds < 60.0f)
+    {
+        return strFormat(format + " s", seconds);
+    }
+    else
+    {
+        uint64_t intSec = (int)floorf(seconds);
+        uint64_t intHr = intSec / 3600;
+        uint64_t intMin = (intSec / 60) % 60;
+        intSec %= 60;
+
+        if (intHr > 0)
+        {
+            return strFormat("%uh %um %us", intHr, intMin, intSec);
+        }
+        else
+        {
+            return strFormat("%um %us", intMin, intSec);
+        }
+    }
+}
 
 int main()
 {
@@ -17,33 +87,32 @@ int main()
     params.resY = 501;
     params.resZ = 501;
     params.step = 0.0025f;
-    params.speed = 30.0f;
+    params.speed = 100.0f;
     params.damp = 1.0f;
-    params.planarOrdering = true;
 
     uint64_t numPoints = params.resX * params.resY * params.resZ;
     auto dims = params.getDimensions();
 
-    float timestep = params.getMaxTimestep();
+    float timestep = 0.95f * params.getMaxTimestep();
     uint32_t runs = 20;
 
     std::cout << strFormat(
         "resolution:      %u x %u x %u\n"
-        "step size:       %.7f m\n"
-        "dimensions:      %.7f m x %.7f m x %.7f m\n"
+        "step size:       %s\n"
+        "dimensions:      %s x %s x %s\n"
         "volume:          %.7f m^3\n"
-        "speed:           %.7f m/s\n"
-        "max timestep:    %.7f s\n"
-        "min wavelength:  %.7f m\n"
-        "max frequency:   %.2f hz\n"
+        "speed:           %s/s\n"
+        "max timestep:    %s\n"
+        "min wavelength:  %s\n"
+        "max frequency:   %.2f Hz\n"
         "damp:            %.2f\n\n",
         params.resX, params.resY, params.resZ,
-        params.step,
-        dims[0], dims[1], dims[2],
+        strFromMeters(params.step),
+        strFromMeters(dims[0]), strFromMeters(dims[1]), strFromMeters(dims[2]),
         params.getVolume(),
-        params.speed,
-        params.getMaxTimestep(),
-        params.getMinWavelength(),
+        strFromMeters(params.speed),
+        strFromSeconds(params.getMaxTimestep()),
+        strFromMeters(params.getMinWavelength()),
         params.getMaxFrequency(),
         params.damp);
 
